@@ -203,6 +203,44 @@ reach `Done`. Decisions that still belong to a person become `human:` gates and 
 affected issue in `Needs Info`. The result is a queue of task-ready issues that AsyncSelf can execute
 in dependency order and in parallel where the graph permits it.
 
+### Configure `spec-planner`
+
+The AsyncSelf runtime profile and the planner configuration are related, but they are not the same
+thing. Configure the runtime profile in [Quick start](#quick-start) first. Then check these planner
+settings:
+
+- When the skill runs from this checkout, it finds the bundled pipeline automatically. If you copy
+  the skill into a user-level Codex skills directory, set `ASYNCSELF_HOME` to the absolute path of
+  this repository.
+- Preview artifacts default to `~/.local/state/asyncself/specs`, outside the checkout. Set
+  `ASYNCSELF_SPEC_OUTPUT_ROOT` only if you want a different private output directory.
+- Each plan needs a Linear project slug and labels, workflow path, source repository, workspace
+  root, SCM provider and project, target branch, branch strategy, and forbidden paths. The skill
+  reads known values from the current project and asks for any material value it cannot infer.
+- Preview and dry-run need no credentials. Live creation with `apply --execute` needs only
+  `LINEAR_API_KEY` in the process environment; the planner deliberately does not load the secrets
+  file automatically.
+
+Example environment setup:
+
+```bash
+# Required only when spec-planner is installed outside this checkout:
+export ASYNCSELF_HOME="/absolute/path/to/asyncself"
+
+# Optional; this is already the default:
+export ASYNCSELF_SPEC_OUTPUT_ROOT="$HOME/.local/state/asyncself/specs"
+
+# Load credentials only in the shell that will perform an approved live apply:
+set -a
+source "$HOME/.config/asyncself/secrets.env"
+set +a
+test -n "${LINEAR_API_KEY:-}"  # checks presence without printing the token
+```
+
+Do not put tokens in the source spec, generated plan, repository profile, or command line. The
+project-specific fields above describe where work should happen; they are not secrets and are
+included in the preview for human verification.
+
 Open the repository in Codex and ask it to use `$spec-planner`, for example:
 
 > Use `$spec-planner` to turn this requirement into an AsyncSelf DAG and draft the Linear issues.

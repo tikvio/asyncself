@@ -54,6 +54,40 @@ Gates。依赖会写成由 Gatekeeper 维护的 `dep:` gate；仍需人决定的
 并只让相关 issue 从 `Needs Info` 开始。其余任务根据依赖分别进入 `Waiting` 或 `Todo`，因此
 AsyncSelf 能按依赖顺序推进，并在允许的地方并发写代码。
 
+### 配置 `spec-planner`
+
+AsyncSelf 的运行 profile 和 `spec-planner` 配置有关联，但不是同一套配置。先按下方“最短
+启动流程”配置 AsyncSelf，再确认以下内容：
+
+- Skill 直接从本仓库运行时会自动找到内置 pipeline；如果把 Skill 复制到用户级 Codex
+  Skills 目录，则必须把 `ASYNCSELF_HOME` 设为 AsyncSelf 仓库的绝对路径。
+- 预览文件默认写入仓库外的 `~/.local/state/asyncself/specs`。只有需要更换私有输出目录时，
+  才设置 `ASYNCSELF_SPEC_OUTPUT_ROOT`。
+- 每份计划都需要 Linear project slug 和 labels、workflow 路径、业务源码路径、workspace
+  根目录、GitHub/GitLab 项目、目标分支、分支策略以及禁止访问的路径。Skill 会从当前项目
+  读取已知值，并询问无法可靠推断的重要配置。
+- preview 和 dry-run 不需要 Token。只有明确批准后的 `apply --execute` 需要当前进程中存在
+  `LINEAR_API_KEY`；planner 不会自动读取 secrets 文件。
+
+示例：
+
+```bash
+# 仅当 spec-planner 安装在本仓库之外时需要：
+export ASYNCSELF_HOME="/absolute/path/to/asyncself"
+
+# 可选；以下路径已经是默认值：
+export ASYNCSELF_SPEC_OUTPUT_ROOT="$HOME/.local/state/asyncself/specs"
+
+# 只在准备执行已批准的 live apply 时，将仓库外密钥加载到当前 shell：
+set -a
+source "$HOME/.config/asyncself/secrets.env"
+set +a
+test -n "${LINEAR_API_KEY:-}"  # 只检查是否存在，不打印 Token
+```
+
+不要把 Token 写进源 spec、生成的计划、仓库 profile 或命令行。上述项目字段不是密钥，
+它们会显示在预览中，供人确认任务究竟会在哪个项目、分支和 workspace 中执行。
+
 在 Codex 中可以这样开始：
 
 > 使用 `$spec-planner` 把这个需求整理成 AsyncSelf DAG，并写出需要的 Linear issues。
