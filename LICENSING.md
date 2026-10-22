@@ -7,7 +7,7 @@ each file, not by a general description of the feature.
 ## Apache-2.0 scope
 
 Except for the two directory trees listed under **PolyForm Noncommercial scope**, this repository
-is licensed under the [Apache License 2.0](LICENSE). This includes:
+is licensed under the [Apache License 2.0](LICENSES/Apache-2.0.txt). This includes:
 
 - the OpenAI Symphony-derived core under `elixir/` and all changes made inside those files;
 - upstream-derived repository skills under `.codex/skills/`, other than `spec-planner/`;
