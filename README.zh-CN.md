@@ -32,6 +32,37 @@ AsyncSelf 就是为“可以放心去摸鱼”设计的个人自动化：你先�
 GitHub 是功能最完整的 profile。GitLab profile 支持兼容的 HTTPS GitLab host、MR watcher、
 状态闭环与人工授权合并，但 Dashboard 中的 PR/MR 检查和展示功能少于 GitHub。
 
+## 内置 Codex Skills
+
+仓库在 `.codex/skills/` 中提供了覆盖计划和交付流程的 Skills：
+
+| Skill | 用途 |
+|---|---|
+| [`spec-planner`](.codex/skills/spec-planner/SKILL.md) | 把一个需求整理成经过人工审核的任务 DAG，并写出可直接执行的 Linear issues。 |
+| `linear` | 读取和更新当前 Linear issue。 |
+| `commit` / `pull` / `push` | 提交代码、同步目标分支、推送分支并创建或更新 PR。 |
+| `debug` | 根据 issue、session 和日志定位卡住或失败的任务。 |
+| `land` | 在人工批准后处理检查、冲突和 PR 合并。 |
+| `release` | 检查许可、测试、版本并发布 AsyncSelf 源码版本。 |
+
+其中 `spec-planner` 是 AsyncSelf 的需求入口。你可以给它一个粗略想法、讨论记录、项目说明
+或已有 Markdown spec，它会先澄清产品与架构问题，再决定独立分支或集成分支策略，把需求
+拆成无环依赖图，并为每个节点写出完整、可独立执行的 Linear issue。
+
+每个 issue 会包含上下文、范围、验收标准、验证方式、labels、分支与 PR/MR 行为以及 Start
+Gates。依赖会写成由 Gatekeeper 维护的 `dep:` gate；仍需人决定的内容会写成 `human:` gate，
+并只让相关 issue 从 `Needs Info` 开始。其余任务根据依赖分别进入 `Waiting` 或 `Todo`，因此
+AsyncSelf 能按依赖顺序推进，并在允许的地方并发写代码。
+
+在 Codex 中可以这样开始：
+
+> 使用 `$spec-planner` 把这个需求整理成 AsyncSelf DAG，并写出需要的 Linear issues。
+> 创建前先给我看完整 DAG、分支方案、labels 和每个 issue 的正文。
+
+`spec-planner` 永远先生成预览和 dry-run；只有你明确批准当前方案后，才会按拓扑顺序真正
+创建 Linear issues。详细命令、配置和审批边界见
+[`spec-planner/SKILL.md`](.codex/skills/spec-planner/SKILL.md)。
+
 ## 运行环境
 
 - Linux：主要目标环境。

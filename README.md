@@ -162,11 +162,55 @@ closed instead of silently selecting one.
 The full procedure, required Linear states, GitHub/Linear integration, GitLab host settings, and
 configuration reference are in [Setup](docs/SETUP.md) and [Configuration](docs/CONFIGURATION.md).
 
-## From spec to Linear
+## Bundled Codex skills
 
-The repository includes a portable Codex skill at `.codex/skills/spec-planner`. Use it to clarify a
-requirement, decide architecture and branch boundaries, preview the dependency graph, and create
-Linear issues only after explicit approval.
+AsyncSelf ships project-scoped Codex skills under `.codex/skills/`. They cover the planning and
+delivery operations that surround the background workers:
+
+| Skill | Purpose |
+|---|---|
+| [`spec-planner`](.codex/skills/spec-planner/SKILL.md) | Turn a requirement into a reviewed task DAG and task-ready Linear issues. |
+| `linear` | Read or update the active Linear issue through the workflow's Linear tools. |
+| `commit` | Create a commit that records both the implementation and its rationale. |
+| `pull` | Merge the configured target branch into the current worker branch safely. |
+| `push` | Push a worker branch and create or update its pull request. |
+| `debug` | Trace stuck or failed runs across issue, session, and runtime logs. |
+| `land` | Shepherd an explicitly approved pull request through checks and conflicts. |
+| `release` | Validate, version, tag, and publish an AsyncSelf source release. |
+
+The worker-facing skills operate inside an issue workspace. `spec-planner` is different: it is the
+intake layer that writes the issues AsyncSelf will later execute.
+
+## `spec-planner`: from requirement to executable issues
+
+Give the bundled `spec-planner` a rough requirement, project notes, a discussion, or existing
+Markdown specs. It can write the complete set of Linear issues needed by the project, rather than
+forcing you to prepare and submit each coding task manually.
+
+Before it creates anything, the skill:
+
+1. resolves blocking product and architecture questions;
+2. chooses an independent-branch or integration-branch delivery strategy;
+3. splits the work into an acyclic dependency graph;
+4. writes one self-contained issue body per node, including context, scope, acceptance criteria,
+   validation, labels, branch and PR/MR behavior, and Start Gates;
+5. assigns the intended initial state: `Needs Info`, `Waiting`, or `Todo`;
+6. previews the Mermaid graph, task table, issue bodies, creation order, and exact labels for human
+   review.
+
+Dependencies become structured `dep:` gates that Gatekeeper can release after predecessor issues
+reach `Done`. Decisions that still belong to a person become `human:` gates and keep only the
+affected issue in `Needs Info`. The result is a queue of task-ready issues that AsyncSelf can execute
+in dependency order and in parallel where the graph permits it.
+
+Open the repository in Codex and ask it to use `$spec-planner`, for example:
+
+> Use `$spec-planner` to turn this requirement into an AsyncSelf DAG and draft the Linear issues.
+> Show me the complete preview, branch plan, labels, and issue bodies before creating anything.
+
+Preview and dry-run are safe and do not write to Linear. Live issue creation happens only after the
+user explicitly approves the current preview. The skill then creates issues in topological order
+and records their real Linear identifiers without printing the API key.
 
 The skill calls the repository-owned deterministic pipeline through:
 
@@ -178,7 +222,8 @@ python .codex/skills/spec-planner/scripts/asyncself-pipeline apply OUTPUT_DIR/da
 ```
 
 Generated previews default outside the repository. See
-[`.codex/skills/spec-planner/SKILL.md`](.codex/skills/spec-planner/SKILL.md) for the review contract.
+[`spec-planner/SKILL.md`](.codex/skills/spec-planner/SKILL.md) for configuration, output files, and
+the complete preview-and-approval contract.
 
 ## Deliberate limits
 
