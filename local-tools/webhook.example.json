@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "mode": "polling",
+  "receiver": {
+    "host": "127.0.0.1",
+    "port": 4081
+  },
+  "linear": {
+    "webhook_secret_env": "LINEAR_WEBHOOK_SECRET"
+  },
+  "gitlab": {
+    "webhook_auth": "secret_token",
+    "webhook_secret_env": "GITLAB_WEBHOOK_SECRET",
+    "project_path": "your-group/your-repository",
+    "allowed_target_branches": [
+      "your-target-branch"
+    ],
+    "missing_target_policy": "block",
+    "pipeline_policy": "allow_absent_current_sha"
+  },
+  "storage_dir": "$SYMPHONY_RUNTIME_DIR/webhook",
+  "poll_seconds": 15,
+  "local_queue_check_seconds": 1,
+  "debounce_seconds": 2,
+  "max_debounce_seconds": 10,
+  "lease_seconds": 120
+}

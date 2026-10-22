@@ -1,0 +1,33 @@
+name: asyncself-tools
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-and-shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Python syntax
+        run: python3 -m compileall -q local-tools .codex/skills/spec-planner
+
+      - name: Python tests
+        run: |
+          python3 -m unittest discover -s local-tools -p 'test_*.py'
+          PYTHONPATH=local-tools/dependency_pipeline \
+            python3 -m unittest discover -s local-tools/dependency_pipeline/tests -p 'test_*.py'
+          python3 -m unittest discover -s .codex/skills/land -p 'test_*.py'
+
+      - name: Shell syntax
+        run: |
+          bash -n start_asyncself.sh
+          bash -n start_symphony.sh
+          find local-tools -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+

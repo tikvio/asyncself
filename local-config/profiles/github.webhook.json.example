@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "profile": "github",
+  "mode": "polling",
+  "allowed_sources": ["linear"],
+  "consumers": {
+    "linear": ["gatekeeper"]
+  },
+  "receiver": {
+    "host": "127.0.0.1",
+    "port": 4082
+  },
+  "linear": {
+    "webhook_secret_env": "LINEAR_WEBHOOK_SECRET"
+  },
+  "storage_dir": "$ASYNCSELF_RUNTIME_DIR/webhook",
+  "poll_seconds": 15,
+  "local_queue_check_seconds": 1,
+  "debounce_seconds": 2,
+  "max_debounce_seconds": 10,
+  "lease_seconds": 120
+}

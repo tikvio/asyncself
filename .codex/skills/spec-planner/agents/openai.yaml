@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spec Planner"
+  short_description: "Plan reviewed AsyncSelf task DAGs"
+  default_prompt: "Use $spec-planner to turn this requirement into a reviewed AsyncSelf task DAG and Linear issue plan."

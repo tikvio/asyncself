@@ -1,0 +1,1 @@
+# No third-party runtime dependencies.  The receiver uses Python's standard library.

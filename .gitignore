@@ -1,0 +1,32 @@
+# Local AsyncSelf secrets and runtime state. Keep distributable examples/docs.
+/local-config/*
+!/local-config/README.md
+!/local-config/DUAL_PLATFORM.md
+!/local-config/profiles/
+/local-config/profiles/*.env
+/local-config/profiles/*.json
+!/local-config/profiles/README.md
+!/local-config/profiles/*.env.example
+!/local-config/profiles/*.json.example
+
+# Local AsyncSelf runtime logs
+/log/
+/elixir/log/
+
+# Generated language/runtime artifacts
+**/__pycache__/
+**/node_modules/
+/elixir/phoenix-colocated/symphony_elixir/node_modules
+*.py[cod]
+.pytest_cache/
+.DS_Store
+
+# Local credentials anywhere in the checkout
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.credentials
+*.secrets

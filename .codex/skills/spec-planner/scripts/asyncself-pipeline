@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Locate and invoke the AsyncSelf dependency-pipeline CLI."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+RELATIVE_CLI = Path("local-tools/dependency_pipeline/scripts/asyncself-pipeline")
+
+
+def candidate_roots() -> list[Path]:
+    roots: list[Path] = []
+    configured = os.environ.get("ASYNCSELF_HOME")
+    if configured:
+        roots.append(Path(configured).expanduser())
+
+    script_path = Path(__file__).resolve()
+    if len(script_path.parents) > 4:
+        roots.append(script_path.parents[4])
+
+    current = Path.cwd().resolve()
+    roots.extend((current, *current.parents))
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        resolved = root.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def find_cli() -> Path:
+    for root in candidate_roots():
+        candidate = root / RELATIVE_CLI
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(
+        "AsyncSelf dependency pipeline not found. Run inside the AsyncSelf "
+        "checkout or set ASYNCSELF_HOME to its repository root."
+    )
+
+
+def main() -> int:
+    try:
+        cli = find_cli()
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return subprocess.call([sys.executable, str(cli), *sys.argv[1:]])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
