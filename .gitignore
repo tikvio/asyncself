@@ -1,6 +1,7 @@
 # Local AsyncSelf secrets and runtime state. Keep distributable examples/docs.
 /local-config/*
 !/local-config/README.md
+!/local-config/secrets.env.example
 !/local-config/DUAL_PLATFORM.md
 !/local-config/profiles/
 /local-config/profiles/*.env
