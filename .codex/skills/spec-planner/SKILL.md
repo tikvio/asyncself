@@ -52,12 +52,19 @@ Write the source spec outside the repository unless the user asks to keep it in
 the project. Then run:
 
 ```bash
-python .codex/skills/spec-planner/scripts/asyncself-pipeline preview SPEC.md --out OUTPUT_DIR
+python .codex/skills/spec-planner/scripts/asyncself-pipeline preview SPEC.md
 ```
 
 When the skill is installed in a user skill directory, the wrapper locates the
-AsyncSelf checkout through `ASYNCSELF_HOME`. Review `dag-preview.md`,
-`preview-graph.md`, `dag-plan.json`, and every file under `specs/`.
+AsyncSelf checkout through `ASYNCSELF_HOME`. Artifact storage should already be
+set during installation or project initialization; see
+[configuration](references/configuration.md). Review `dag-preview.md`,
+`preview-graph.md`, `dag-plan.json`, and every file under `specs/` in the
+generated directory.
+
+Use `--output-mode adjacent` when the user chose project-adjacent storage, or
+`--out OUTPUT_DIR` when the user explicitly chose the exact directory for this
+one run.
 
 ### 4. Review with the user
 

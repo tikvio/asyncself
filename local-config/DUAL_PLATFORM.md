@@ -7,13 +7,18 @@ or rewrite the other platform's workflow or configuration.
 
 1. Copy `profiles/gitlab.env.example` to `profiles/gitlab.env` and/or copy
    `profiles/github.env.example` to `profiles/github.env`.
-2. Copy `secrets.env.example` to `$HOME/.config/asyncself/secrets.env`, set its
+2. Create `$HOME/.config/asyncself/workflows/`. From the repository root, copy
+   `elixir/WORKFLOW.md` to `gitlab.md` and/or `elixir/WORKFLOW.github.md` to
+   `github.md`, then replace every example project, label, branch, and Codex
+   model value.
+3. Copy `secrets.env.example` to `$HOME/.config/asyncself/secrets.env`, set its
    permissions to `600`, and point `ASYNCSELF_SHARED_ENV_FILE` to it.
-3. Adjust local source/workspace paths in the copied profile. No source-code
-   edit is required.
-4. For GitHub, install `gh`, authenticate it non-interactively with
+4. Adjust local source/workspace paths in the copied profile. Keep its Linear
+   project, label, provider repository, and target branch consistent with the
+   external workflow. No source-code edit is required.
+5. For GitHub, install `gh`, authenticate it non-interactively with
    `GH_TOKEN`/`GITHUB_TOKEN`, and verify access to the configured repository.
-5. Run a read-only check before starting:
+6. Run a read-only check before starting:
 
 ```bash
 ./start_asyncself.sh --profile gitlab --check

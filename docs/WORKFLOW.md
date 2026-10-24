@@ -21,6 +21,11 @@ An issue with unresolved human gates starts or remains in `Needs Info`. An issue
 dependencies starts or remains in `Waiting`. A fully satisfied task receives the configured active
 label and moves to `Todo`.
 
+To answer a `Needs Info` issue, record the decision in a comment when an audit trail is useful, then
+edit or click the matching checkbox in the issue description so it becomes `- [x] human: ...`.
+Gatekeeper reads the structured Start Gate, not free-form comments. With dependencies still open,
+the issue moves to `Waiting`; with every dependency complete, it can move to `Todo`.
+
 ## Coding loop
 
 1. The core polls the configured Linear project for eligible issues.
@@ -39,6 +44,14 @@ It is the human authorization boundary.
   repository and non-`main` base, checks the PR head and required check, then squash-merges.
 - **GitHub:** merge the PR in GitHub. Linear's native integration reconciles the issue state.
 - **Linear Diffs:** approve and merge there; the native GitHub integration reconciles `Done`.
+
+These three entry points reduce to two underlying writes:
+
+1. the Dashboard changes the Linear issue to `Merging`, which authorizes Gatekeeper to call GitHub;
+2. GitHub or Linear Diffs directly merges the GitHub pull request, after which Linear reconciles it.
+
+Choose one path for a pull request. Do not click Dashboard `Merging` and then manually merge the
+same PR merely to make the queue move; `Merging` is an authorization signal, not a progress button.
 
 The dashboard may show `Waiting Gatekeeper` while a requested merge is being processed. This does
 not mean it merged. `PR merged` appears only after GitHub returns the real merged state.

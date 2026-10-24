@@ -46,6 +46,10 @@ codex:
 observability:
   dashboard_enabled: true
   refresh_ms: 1000
+  # Required for the Project Issues list. GitLab provider detail remains more
+  # limited than the GitHub profile.
+  dashboard_aggregation_enabled: true
+  dashboard_aggregation_refresh_ms: 60000
 server:
   host: 127.0.0.1
 ---

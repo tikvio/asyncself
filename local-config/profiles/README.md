@@ -6,6 +6,12 @@ file and point `ASYNCSELF_SHARED_ENV_FILE` at it when shared credentials are
 intentional. Never commit `*.env`, `active-profile`, `runtime/`, SQLite files,
 locks, or webhook secrets.
 
+Each example profile points to an external workflow under
+`$HOME/.config/asyncself/workflows/`. Copy `elixir/WORKFLOW.github.md` to
+`github.md` or `elixir/WORKFLOW.md` to `gitlab.md`, then replace every example
+project, label, branch, and model value. A profile without its matching external
+workflow is incomplete.
+
 The selected profile controls the complete component matrix:
 
 - `gitlab`: the Symphony-derived core, Gatekeeper, GitLab MR watcher, and optional

@@ -15,7 +15,8 @@ tracker:
     - Duplicate
     - Done
 dashboard:
-  # Dashboard writes are opt-in; this does not affect read-only aggregation.
+  # Set true only after `--check` passes and you want the dashboard to move a
+  # Linear issue from In Review to Merging. Read-only aggregation is separate.
   linear_actions_enabled: false
 polling:
   interval_ms: 5000
@@ -45,6 +46,10 @@ codex:
 observability:
   dashboard_enabled: true
   refresh_ms: 1000
+  # Required for the Project Issues list and provider details. Manual refresh
+  # cannot override a disabled aggregation switch.
+  dashboard_aggregation_enabled: true
+  dashboard_aggregation_refresh_ms: 60000
 server:
   host: 127.0.0.1
 ---

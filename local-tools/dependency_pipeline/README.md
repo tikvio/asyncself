@@ -24,8 +24,45 @@ python3 local-tools/dependency_pipeline/scripts/asyncself-pipeline apply path/to
 the token named by `--api-key-env` (default: `LINEAR_API_KEY`) and never store it
 in the generated plan.
 
-Preview output defaults to `~/.local/state/asyncself/specs`. Set
-`ASYNCSELF_SPEC_OUTPUT_ROOT` to use another location.
+Every preview is a persistent review package containing `dag-preview.md`,
+`preview-graph.md`, `dag-plan.json`, and one file per task under `specs/`. The
+command prints its resolved `artifacts:` path.
+
+The default central layout separates one Codex installation's output by
+AsyncSelf instance and business project:
+
+```text
+~/.local/state/asyncself/specs/<instance>/<project>/<timestamp>-<requirement>/
+```
+
+Set the namespaces with environment variables:
+
+```bash
+export ASYNCSELF_SPEC_INSTANCE="personal"
+export ASYNCSELF_SPEC_PROJECT="example-app"
+python3 local-tools/dependency_pipeline/scripts/asyncself-pipeline preview path/to/spec.md
+```
+
+Or set them for one command:
+
+```bash
+python3 local-tools/dependency_pipeline/scripts/asyncself-pipeline preview path/to/spec.md \
+  --instance personal --project example-app
+```
+
+`ASYNCSELF_SPEC_STORE_ROOT` or `--store-root` moves the central store while
+preserving the instance/project hierarchy. To keep generated plans beside the
+business repository instead, use:
+
+```bash
+python3 local-tools/dependency_pipeline/scripts/asyncself-pipeline preview path/to/spec.md \
+  --output-mode adjacent
+```
+
+Adjacent mode derives a sibling `<project>.asyncself-specs/` directory from the
+spec's `Local Source Repo`; it does not write inside that Git repository. Use
+`--out` only when selecting the exact directory for one run. The legacy
+`ASYNCSELF_SPEC_OUTPUT_ROOT` remains supported as an exact project output root.
 
 ## Codex skill
 

@@ -19,5 +19,9 @@ Commands that access Linear and therefore require credentials:
 - `gatekeeper`
 
 `ASYNCSELF_HOME` is not a secret. Set it to the AsyncSelf repository root when
-this skill is installed outside that checkout. `ASYNCSELF_SPEC_OUTPUT_ROOT`
-selects the generated-artifact directory.
+this skill is installed outside that checkout. Artifact placement variables are
+also non-secret: `ASYNCSELF_SPEC_INSTANCE`, `ASYNCSELF_SPEC_PROJECT`,
+`ASYNCSELF_SPEC_STORE_ROOT`, and `ASYNCSELF_SPEC_OUTPUT_MODE`. The legacy
+`ASYNCSELF_SPEC_OUTPUT_ROOT` remains an exact project-output-root override. See
+[configuration](configuration.md#generated-artifact-storage) for layout and
+precedence.

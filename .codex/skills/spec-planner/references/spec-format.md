@@ -50,3 +50,25 @@ invalid integration-branch base is rejected before preview files are written.
 Optional task fields include `Labels`, `Review`, `Review URL`, `Merging Action`,
 `Initial`, and `Slug`. Text not consumed as a field or Start Gate becomes the
 task body and is carried into the generated Linear description.
+
+## Preview archive
+
+The Markdown file above is the source input. `preview` turns it into an
+auditable package containing the graph, plan JSON, summary, and standalone task
+specs. By default, runs are separated by AsyncSelf instance and business
+project:
+
+```text
+~/.local/state/asyncself/specs/
+  <instance>/
+    <project>/
+      <timestamp>-<requirement>/
+        dag-preview.md
+        preview-graph.md
+        dag-plan.json
+        specs/
+```
+
+The source spec may be kept with that review package or in another location the
+user chose. Do not silently place generated artifacts inside the AsyncSelf
+checkout or a business Git repository.

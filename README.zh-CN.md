@@ -49,6 +49,11 @@ GitHub 是功能最完整的 profile。GitLab profile 支持兼容的 HTTPS GitL
 或已有 Markdown spec，它会先澄清产品与架构问题，再决定独立分支或集成分支策略，把需求
 拆成无环依赖图，并为每个节点写出完整、可独立执行的 Linear issue。
 
+`spec-planner` 不只是向 Linear 写数据。每次 preview 都会先在本地生成一套可审核产物：
+`dag-preview.md`、`preview-graph.md`、`dag-plan.json`，以及 `specs/` 下每个任务各自的 spec。
+因此应在安装 Skill 或初始化项目时一次性设置产物位置；一个 Codex 管理多个 AsyncSelf 实例
+或业务项目时尤其要配置清楚。之后每次规划都会自动按该规则归档，不再重复询问。
+
 每个 issue 会包含上下文、范围、验收标准、验证方式、labels、分支与 PR/MR 行为以及 Start
 Gates。依赖会写成由 Gatekeeper 维护的 `dep:` gate；仍需人决定的内容会写成 `human:` gate，
 并只让相关 issue 从 `Needs Info` 开始。其余任务根据依赖分别进入 `Waiting` 或 `Todo`，因此
@@ -57,12 +62,18 @@ AsyncSelf 能按依赖顺序推进，并在允许的地方并发写代码。
 ### 配置 `spec-planner`
 
 AsyncSelf 的运行 profile 和 `spec-planner` 配置有关联，但不是同一套配置。先按下方“最短
-启动流程”配置 AsyncSelf，再确认以下内容：
+启动流程”配置 AsyncSelf，再在安装或项目初始化时一次性设置以下内容：
 
 - Skill 直接从本仓库运行时会自动找到内置 pipeline；如果把 Skill 复制到用户级 Codex
   Skills 目录，则必须把 `ASYNCSELF_HOME` 设为 AsyncSelf 仓库的绝对路径。
-- 预览文件默认写入仓库外的 `~/.local/state/asyncself/specs`。只有需要更换私有输出目录时，
-  才设置 `ASYNCSELF_SPEC_OUTPUT_ROOT`。
+- 默认集中归档结构为
+  `~/.local/state/asyncself/specs/<实例>/<项目>/<时间>-<需求>/`。一个 Codex 管理多个实例或
+  项目时，应设置 `ASYNCSELF_SPEC_INSTANCE` 和 `ASYNCSELF_SPEC_PROJECT`。
+- 设置 `ASYNCSELF_SPEC_STORE_ROOT` 可以移动整个集中归档目录，同时保留实例/项目分层。
+  设置 `ASYNCSELF_SPEC_OUTPUT_MODE=adjacent` 则会把产物放到业务项目旁的
+  `<项目>.asyncself-specs/`。默认不会写进 AsyncSelf 仓库或业务 Git 仓库内部。
+- 兼容变量 `ASYNCSELF_SPEC_OUTPUT_ROOT` 表示当前项目的精确产物根目录；`--out` 的优先级
+  更高，只指定某一次 preview 的完整输出目录。
 - 每份计划都需要 Linear project slug 和 labels、workflow 路径、业务源码路径、workspace
   根目录、GitHub/GitLab 项目、目标分支、分支策略以及禁止访问的路径。Skill 会从当前项目
   读取已知值，并询问无法可靠推断的重要配置。
@@ -75,8 +86,15 @@ AsyncSelf 的运行 profile 和 `spec-planner` 配置有关联，但不是同一
 # 仅当 spec-planner 安装在本仓库之外时需要：
 export ASYNCSELF_HOME="/absolute/path/to/asyncself"
 
-# 可选；以下路径已经是默认值：
-export ASYNCSELF_SPEC_OUTPUT_ROOT="$HOME/.local/state/asyncself/specs"
+# 一个 Codex 管理多个实例或项目时建议明确设置：
+export ASYNCSELF_SPEC_INSTANCE="personal"
+export ASYNCSELF_SPEC_PROJECT="example-app"
+
+# 可选：移动统一归档根目录，但仍保留实例/项目分层：
+export ASYNCSELF_SPEC_STORE_ROOT="$HOME/Documents/asyncself-specs"
+
+# 或者放到业务项目旁边：
+# export ASYNCSELF_SPEC_OUTPUT_MODE="adjacent"
 
 # 只在准备执行已批准的 live apply 时，将仓库外密钥加载到当前 shell：
 set -a
@@ -116,24 +134,36 @@ mise exec -- mix setup
 cd ..
 
 cp local-config/profiles/github.env.example local-config/profiles/github.env
-mkdir -p "$HOME/.config/asyncself"
+mkdir -p "$HOME/.config/asyncself/workflows"
+cp elixir/WORKFLOW.github.md "$HOME/.config/asyncself/workflows/github.md"
 cp local-config/secrets.env.example "$HOME/.config/asyncself/secrets.env"
-chmod 600 "$HOME/.config/asyncself/secrets.env"
+chmod 600 "$HOME/.config/asyncself/secrets.env" \
+  "$HOME/.config/asyncself/workflows/"*.md
 
-# 填写 profile 与仓库外的 secrets.env 后：
+# 填写 profile、仓库外 workflow 与 secrets.env 后：
 ./start_asyncself.sh --profile github --check
 ./start_asyncself.sh --profile github
 ```
 
-GitLab 用户将 `github` 替换为 `gitlab`。新配置使用 `ASYNCSELF_*`；旧的
+GitLab 用户改为复制 `local-config/profiles/gitlab.env.example` 和 `elixir/WORKFLOW.md`，
+并把外置 workflow 保存为 `$HOME/.config/asyncself/workflows/gitlab.md`。profile 与 workflow
+中的 Linear project、required label 和非 `main` 目标分支必须一致；workflow 里所有
+`example-*` 值都要替换。
+
+workflow 示例已开启只读 Project Issues 聚合。GitHub Dashboard 写 Linear 默认仍关闭；
+只有在 `--check` 通过、并且确实希望从 Dashboard 执行 `In Review -> Merging` 时，才把外置
+GitHub workflow 的 `dashboard.linear_actions_enabled` 改为 `true`。
+
+新配置使用 `ASYNCSELF_*`；旧的
 `start_symphony.sh` 和 `SYMPHONY_*` 作为兼容入口继续可用。详细的 Linear 状态、集成、
 安全边界和排错方法请阅读英文主 README 链接的文档。
 
 ## 当前边界
 
 这是基于 OpenAI Symphony 改造的实验性个人项目，不是托管服务，也不会替人判断代码是否
-应该合并。首个公开快照会执行单元测试、语法检查、配置检查和密钥模式扫描，但按当前发布
-计划，不把“用全新公开账号在全新机器上重新跑完整闭环”作为首次上传的阻塞项。
+应该合并。GitHub profile 已在 WSL 中通过真实端到端验证，包括 `Needs Info`、依赖释放、
+隔离 workspace、PR 创建、Gatekeeper 合并、Linear Diffs 合并以及 `Done` 对账。该结果不是
+使用全新公开账号和全新机器完成的认证；GitLab profile 也没有在同一次验证中重跑完整闭环。
 
 上游来源和基线见 [SHOWCASE_BASELINE.md](SHOWCASE_BASELINE.md)，许可证边界见
 [LICENSING.md](LICENSING.md)。AsyncSelf 是独立项目，不代表 OpenAI 官方产品，也未获得

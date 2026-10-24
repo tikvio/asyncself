@@ -131,19 +131,32 @@ Tokens and webhook secrets must live outside the repository. The examples expect
    cd ..
    ```
 
-2. Copy one public profile and the external secret template:
+2. Copy one public profile, its workflow template, and the external secret template:
 
    ```bash
    cp local-config/profiles/github.env.example local-config/profiles/github.env
-   # Or: cp local-config/profiles/gitlab.env.example local-config/profiles/gitlab.env
+   mkdir -p "$HOME/.config/asyncself/workflows"
+   cp elixir/WORKFLOW.github.md "$HOME/.config/asyncself/workflows/github.md"
 
-   mkdir -p "$HOME/.config/asyncself"
+   # For GitLab, use these two files instead:
+   # cp local-config/profiles/gitlab.env.example local-config/profiles/gitlab.env
+   # cp elixir/WORKFLOW.md "$HOME/.config/asyncself/workflows/gitlab.md"
+
    cp local-config/secrets.env.example "$HOME/.config/asyncself/secrets.env"
-   chmod 600 "$HOME/.config/asyncself/secrets.env"
+   chmod 600 "$HOME/.config/asyncself/secrets.env" \
+     "$HOME/.config/asyncself/workflows/"*.md
    ```
 
-3. Fill the profile with your Linear project, source clone, workspace root, repository, required
-   label, and a non-`main` target branch. Fill the external file with tokens.
+3. Fill the ignored profile with your source clone, workspace root, provider repository, Linear
+   identifiers, required label, and a non-`main` target branch. Edit the external workflow too:
+   replace every `example-*` project slug, label, and target branch, and choose the Codex model and
+   reasoning effort intentionally. The project slug, label, and target branch must agree between
+   the profile and workflow. Fill only the external secrets file with tokens.
+
+   The workflow templates enable the read-only Project Issues aggregation. GitHub dashboard writes
+   remain disabled by default; after `--check` succeeds, set
+   `dashboard.linear_actions_enabled: true` in the external GitHub workflow only if you want the
+   dashboard's `In Review -> Merging` control.
 
 4. Validate without starting services, then launch:
 
@@ -187,6 +200,13 @@ Give the bundled `spec-planner` a rough requirement, project notes, a discussion
 Markdown specs. It can write the complete set of Linear issues needed by the project, rather than
 forcing you to prepare and submit each coding task manually.
 
+`spec-planner` always creates a local review package before any Linear write. Each preview produces
+`dag-preview.md`, `preview-graph.md`, `dag-plan.json`, and one standalone document per task under
+`specs/`. These are real generated artifacts, so configure their storage once during installation
+or project initialization, especially when one Codex installation serves multiple AsyncSelf
+instances or business projects. Normal planning runs then archive them automatically without asking
+again.
+
 Before it creates anything, the skill:
 
 1. resolves blocking product and architecture questions;
@@ -206,14 +226,22 @@ in dependency order and in parallel where the graph permits it.
 ### Configure `spec-planner`
 
 The AsyncSelf runtime profile and the planner configuration are related, but they are not the same
-thing. Configure the runtime profile in [Quick start](#quick-start) first. Then check these planner
-settings:
+thing. Configure the runtime profile in [Quick start](#quick-start) first. Set these planner values
+once during installation or project initialization:
 
 - When the skill runs from this checkout, it finds the bundled pipeline automatically. If you copy
   the skill into a user-level Codex skills directory, set `ASYNCSELF_HOME` to the absolute path of
   this repository.
-- Preview artifacts default to `~/.local/state/asyncself/specs`, outside the checkout. Set
-  `ASYNCSELF_SPEC_OUTPUT_ROOT` only if you want a different private output directory.
+- The default central layout is
+  `~/.local/state/asyncself/specs/<instance>/<project>/<timestamp>-<requirement>/`. Set
+  `ASYNCSELF_SPEC_INSTANCE` and `ASYNCSELF_SPEC_PROJECT` when one Codex installation plans for more
+  than one AsyncSelf instance or project.
+- Set `ASYNCSELF_SPEC_STORE_ROOT` to move the whole central store while preserving the
+  instance/project layout. Set `ASYNCSELF_SPEC_OUTPUT_MODE=adjacent` to place runs beside the source
+  repository in `<project>.asyncself-specs/` instead. Generated artifacts do not go inside either
+  the AsyncSelf checkout or the business Git repository by default.
+- `ASYNCSELF_SPEC_OUTPUT_ROOT` remains an exact project-output-root override for compatibility. The
+  CLI `--out` option is more specific still and selects the exact directory for one preview run.
 - Each plan needs a Linear project slug and labels, workflow path, source repository, workspace
   root, SCM provider and project, target branch, branch strategy, and forbidden paths. The skill
   reads known values from the current project and asks for any material value it cannot infer.
@@ -227,8 +255,15 @@ Example environment setup:
 # Required only when spec-planner is installed outside this checkout:
 export ASYNCSELF_HOME="/absolute/path/to/asyncself"
 
-# Optional; this is already the default:
-export ASYNCSELF_SPEC_OUTPUT_ROOT="$HOME/.local/state/asyncself/specs"
+# Recommended when one Codex plans for several instances or projects:
+export ASYNCSELF_SPEC_INSTANCE="personal"
+export ASYNCSELF_SPEC_PROJECT="example-app"
+
+# Optional: relocate the central store without changing its hierarchy:
+export ASYNCSELF_SPEC_STORE_ROOT="$HOME/Documents/asyncself-specs"
+
+# Alternative: keep generated runs beside the business repository:
+# export ASYNCSELF_SPEC_OUTPUT_MODE="adjacent"
 
 # Load credentials only in the shell that will perform an approved live apply:
 set -a
@@ -253,7 +288,8 @@ and records their real Linear identifiers without printing the API key.
 The skill calls the repository-owned deterministic pipeline through:
 
 ```bash
-python .codex/skills/spec-planner/scripts/asyncself-pipeline preview SPEC.md --out OUTPUT_DIR
+python .codex/skills/spec-planner/scripts/asyncself-pipeline preview SPEC.md \
+  --instance personal --project example-app
 python .codex/skills/spec-planner/scripts/asyncself-pipeline apply OUTPUT_DIR/dag-plan.json
 # After reviewing and explicitly approving the plan:
 python .codex/skills/spec-planner/scripts/asyncself-pipeline apply OUTPUT_DIR/dag-plan.json --execute
@@ -270,8 +306,10 @@ the complete preview-and-approval contract.
 - It does not decide that code is good enough to merge. Humans own requirements, `Needs Info`
   decisions, review, and merge authorization.
 - GitLab has fewer dashboard and PR/MR inspection features than GitHub.
-- The first public snapshot has unit, syntax, configuration, and secret-pattern checks, but has not
-  yet been revalidated from scratch on a clean machine with new public test accounts.
+- The GitHub profile has completed a real WSL end-to-end validation covering `Needs Info`, dependency
+  release, isolated-workspace execution, PR creation, Gatekeeper merge, Linear Diffs merge, and
+  `Done` reconciliation. This is not a clean-machine certification with fresh public test accounts,
+  and the GitLab profile was not revalidated in that same run.
 - Webhook mode is optional. Polling remains the baseline and avoids exposing a local receiver.
 
 Read [Security](SECURITY.md) before giving tokens to a long-running worker.
