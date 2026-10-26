@@ -35,6 +35,9 @@ claims that the PR merged.
 Status wording is intentionally conservative:
 
 - `Waiting Gatekeeper` means a merge request is queued or being evaluated.
+- Repeating `In Review -> Merging` after an external state round trip creates a
+  new transition revision. Duplicate clicks within the same Linear issue
+  revision remain idempotent.
 - `PR merged` means GitHub has confirmed the PR's merged state.
 - passing checks or a mergeable PR never move `In Review` to `Merging` by themselves.
 

@@ -5,7 +5,7 @@ defmodule SymphonyElixir.AgentRunner do
 
   require Logger
   alias SymphonyElixir.Codex.AppServer
-  alias SymphonyElixir.{Config, PromptBuilder, Tracker, Workspace}
+  alias SymphonyElixir.{Config, PromptBuilder, Tracker, TrackerToolServer, Workspace}
   alias SymphonyElixir.Tracker.Issue
 
   @type worker_host :: String.t() | nil
@@ -52,7 +52,7 @@ defmodule SymphonyElixir.AgentRunner do
 
         try do
           with :ok <- Workspace.run_before_run_hook(workspace, issue, worker_host) do
-            run_codex_turns(workspace, issue, codex_update_recipient, opts, worker_host)
+            run_backend_turns(workspace, issue, codex_update_recipient, opts, worker_host)
           end
         after
           Workspace.run_after_run_hook(workspace, issue, worker_host)
@@ -164,6 +164,120 @@ defmodule SymphonyElixir.AgentRunner do
   end
 
   defp send_worker_runtime_info(_recipient, _issue, _worker_host, _workspace), do: :ok
+
+  defp run_backend_turns(workspace, issue, codex_update_recipient, opts, worker_host) do
+    runtime = Keyword.get(opts, :backend_runtime, Config.backend_runtime())
+
+    if runtime.backend == :deepseek do
+      run_deepseek_turn(workspace, issue, codex_update_recipient, opts, runtime)
+    else
+      run_codex_turns(workspace, issue, codex_update_recipient, opts, worker_host)
+    end
+  end
+
+  defp run_deepseek_turn(workspace, issue, recipient, opts, runtime) do
+    timeouts = runtime.timeouts
+    adapter = runtime.adapter
+
+    context = %{
+      workspace: workspace,
+      issue: issue,
+      recipient: recipient,
+      opts: opts,
+      max_turns: Keyword.get(opts, :max_turns, Config.settings!().agent.max_turns),
+      fetcher: Keyword.get(opts, :issue_state_fetcher, &Tracker.fetch_issues_by_ids/1),
+      timeouts: Map.to_list(timeouts),
+      adapter: adapter
+    }
+
+    with {:ok, mcp_servers} <- deepseek_mcp_servers(issue) do
+      case adapter.start_session(workspace,
+             command: runtime.command,
+             handshake_timeout_ms: timeouts.handshake_timeout_ms,
+             mcp_servers: mcp_servers
+           ) do
+        {:ok, session} ->
+          try do
+            do_run_deepseek_turns(session, context, 1, 0)
+          after
+            adapter.close_session(session)
+          end
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp deepseek_mcp_servers(issue) do
+    with {:ok, executable} <- TrackerToolServer.executable(),
+         {:ok, server} <- TrackerToolServer.mcp_server(issue, executable, Config.settings!().tracker) do
+      {:ok, [server]}
+    else
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp do_run_deepseek_turns(session, context, turn_number, no_progress_turns) do
+    prompt = build_turn_prompt(context.issue, context.opts, turn_number, context.max_turns)
+    before_snapshot = workspace_snapshot(context.workspace, nil)
+
+    with {:ok, turn} <- context.adapter.start_turn(session, prompt, context.issue),
+         {:ok, result} <- context.adapter.await_turn(session, turn, context.timeouts) do
+      send_codex_update(context.recipient, context.issue, %{
+        event: :turn_completed,
+        backend: :deepseek,
+        result: result,
+        timestamp: DateTime.utc_now()
+      })
+
+      after_snapshot = workspace_snapshot(context.workspace, nil)
+      continue_deepseek_turns(session, context, turn_number, no_progress_turns, before_snapshot, after_snapshot)
+    end
+  end
+
+  defp continue_deepseek_turns(
+         session,
+         context,
+         turn_number,
+         no_progress_turns,
+         before_snapshot,
+         after_snapshot
+       ) do
+    case continue_with_issue?(context.issue, context.fetcher) do
+      {:continue, refreshed_issue} when turn_number < context.max_turns ->
+        continue_next_deepseek_turn(
+          session,
+          context,
+          turn_number,
+          no_progress_turns,
+          before_snapshot,
+          after_snapshot,
+          refreshed_issue
+        )
+
+      {:continue, _refreshed_issue} ->
+        :ok
+
+      {:done, _issue} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp continue_next_deepseek_turn(session, context, turn_number, no_progress_turns, before_snapshot, after_snapshot, refreshed_issue) do
+    count = next_no_progress_count(no_progress_turns, before_snapshot, after_snapshot, context.issue, refreshed_issue, false)
+    limit = Config.settings!().agent.max_no_progress_turns
+
+    if limit > 0 and count >= limit do
+      send_no_progress(context.recipient, context.issue, "No workspace or issue progress across #{count} completed DeepSeek turns; inspect before resuming")
+      :ok
+    else
+      do_run_deepseek_turns(session, %{context | issue: refreshed_issue}, turn_number + 1, count)
+    end
+  end
 
   defp run_codex_turns(workspace, issue, codex_update_recipient, opts, worker_host) do
     context = %{

@@ -3,10 +3,16 @@ defmodule SymphonyElixir.CLI do
   Escript entrypoint for running Symphony with an explicit WORKFLOW.md path.
   """
 
-  alias SymphonyElixir.LogFile
+  alias SymphonyElixir.{LogFile, Preflight, TrackerToolServer}
 
   @acknowledgement_switch :i_understand_that_this_will_be_running_without_the_usual_guardrails
-  @switches [{@acknowledgement_switch, :boolean}, logs_root: :string, port: :integer]
+  @switches [
+    {@acknowledgement_switch, :boolean},
+    logs_root: :string,
+    port: :integer,
+    check: :boolean,
+    check_live: :boolean
+  ]
 
   @type ensure_started_result :: {:ok, [atom()]} | {:error, term()}
   @type deps :: %{
@@ -17,17 +23,27 @@ defmodule SymphonyElixir.CLI do
           ensure_all_started: (-> ensure_started_result())
         }
 
-  @spec main([String.t()]) :: no_return()
+  @spec main([String.t()]) :: :ok | no_return()
+  def main(["--tracker-tool-server" | args]) do
+    # The MCP child is an escript, so it does not inherit the host application's
+    # supervision tree. Start only Req (and its Finch supervisor), not the
+    # orchestration application or a workflow, before serving a Linear request.
+    case ensure_tracker_tool_server_http_client() do
+      :ok -> TrackerToolServer.main(args)
+      {:error, reason} -> halt_tracker_tool_server(reason)
+    end
+  end
+
   def main(args) do
     main(args, fn -> Application.ensure_all_started(:symphony_elixir) end)
   end
 
   @doc false
-  @spec main([String.t()], (-> ensure_started_result())) :: no_return()
+  @spec main([String.t()], (-> ensure_started_result())) :: :ok | no_return()
   def main(args, ensure_all_started) do
     case evaluate(args, runtime_deps(ensure_all_started)) do
       :ok ->
-        wait_for_shutdown()
+        if preflight_requested?(args), do: :ok, else: wait_for_shutdown()
 
       {:error, message} ->
         IO.puts(:stderr, message)
@@ -35,27 +51,73 @@ defmodule SymphonyElixir.CLI do
     end
   end
 
+  @doc false
+  @spec ensure_tracker_tool_server_http_client((-> ensure_started_result())) :: :ok | {:error, term()}
+  def ensure_tracker_tool_server_http_client(ensure_all_started \\ fn -> Application.ensure_all_started(:req) end) do
+    case ensure_all_started.() do
+      {:ok, _started} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
   @spec evaluate([String.t()], deps()) :: :ok | {:error, String.t()}
   def evaluate(args, deps \\ runtime_deps()) do
     case OptionParser.parse(args, strict: @switches) do
       {opts, [], []} ->
-        with :ok <- require_guardrails_acknowledgement(opts),
-             :ok <- maybe_set_logs_root(opts, deps),
-             :ok <- maybe_set_server_port(opts, deps) do
-          run(Path.expand("WORKFLOW.md"), deps)
-        end
+        evaluate_path(Path.expand("WORKFLOW.md"), opts, deps)
 
       {opts, [workflow_path], []} ->
+        evaluate_path(workflow_path, opts, deps)
+
+      _ ->
+        {:error, usage_message()}
+    end
+  end
+
+  defp evaluate_path(workflow_path, opts, deps) do
+    case preflight_mode(opts) do
+      {:ok, mode} ->
+        preflight_workflow(workflow_path, mode, deps)
+
+      :run ->
         with :ok <- require_guardrails_acknowledgement(opts),
              :ok <- maybe_set_logs_root(opts, deps),
              :ok <- maybe_set_server_port(opts, deps) do
           run(workflow_path, deps)
         end
 
-      _ ->
-        {:error, usage_message()}
+      {:error, _reason} = error ->
+        error
     end
   end
+
+  defp preflight_workflow(workflow_path, mode, deps) do
+    expanded_path = Path.expand(workflow_path)
+
+    if deps.file_regular?.(expanded_path) do
+      preflight_result(expanded_path, mode)
+    else
+      {:error, "Workflow file not found: #{expanded_path}"}
+    end
+  end
+
+  defp preflight_result(path, mode) do
+    case Preflight.check(path, mode) do
+      :ok -> :ok
+      {:error, reason} -> {:error, "Preflight failed for workflow #{path}: #{inspect(reason)}"}
+    end
+  end
+
+  defp preflight_mode(opts) do
+    case {Keyword.get(opts, :check, false), Keyword.get(opts, :check_live, false)} do
+      {true, false} -> {:ok, :static}
+      {false, true} -> {:ok, :live}
+      {false, false} -> :run
+      {true, true} -> {:error, usage_message()}
+    end
+  end
+
+  defp preflight_requested?(args), do: "--check" in args or "--check-live" in args
 
   @spec run(String.t(), deps()) :: :ok | {:error, String.t()}
   def run(workflow_path, deps) do
@@ -78,7 +140,7 @@ defmodule SymphonyElixir.CLI do
 
   @spec usage_message() :: String.t()
   defp usage_message do
-    "Usage: symphony [--logs-root <path>] [--port <port>] [path-to-WORKFLOW.md]"
+    "Usage: symphony [--check | --check-live] [--logs-root <path>] [--port <port>] [path-to-WORKFLOW.md]"
   end
 
   @spec runtime_deps() :: deps()
@@ -173,6 +235,12 @@ defmodule SymphonyElixir.CLI do
   defp set_server_port_override(port) when is_integer(port) and port >= 0 do
     Application.put_env(:symphony_elixir, :server_port_override, port)
     :ok
+  end
+
+  @spec halt_tracker_tool_server(term()) :: no_return()
+  defp halt_tracker_tool_server(reason) do
+    IO.puts(:stderr, "Unable to start the tracker MCP HTTP client: #{inspect(reason)}")
+    System.halt(1)
   end
 
   @spec wait_for_shutdown() :: no_return()

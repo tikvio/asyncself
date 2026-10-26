@@ -172,6 +172,13 @@ Notes:
   `0` disables it. `agent.max_no_progress_turns` blocks after consecutive completed turns with
   clean unchanged Git workspace, unchanged issue state/body, and no completed command or dynamic
   tool action; `0` disables it. Blocked entries are in-memory and need inspection before restart.
+- `agent.backend` defaults to `codex`. The experimental deployment choice `deepseek` accepts only
+  local workers with the Linear tracker and the exact `deepseek.command: dsh --profile acp`; it
+  rejects SSH workers, other trackers, and a nonzero token ceiling because ACP usage is unknown.
+  Backend, command, topology, tracker, and timeout changes require a service restart. Use
+  `symphony --check` before startup and the explicitly billable `symphony --check-live` only in an
+  isolated workspace. See `docs/dual_cli_backend.md`; do not treat either command as real
+  Linear/SCM delivery evidence.
 - If the Markdown body is blank, Symphony uses a default prompt template that includes the issue
   identifier, title, and body.
 - Use `hooks.after_create` to bootstrap a fresh workspace. For a Git-backed repo, you can run

@@ -8,12 +8,15 @@ defmodule SymphonyElixirWeb.Dashboard.RuntimeComponents do
 
   @spec overview(map()) :: Phoenix.LiveView.Rendered.t()
   def overview(assigns) do
+    assigns = assign(assigns, :runtime, Map.get(assigns.payload, :runtime, %{backend: :codex, restart_required: false}))
+
     ~H"""
     <section class="metric-grid" id="runtime-overview">
       <article class="metric-card"><p class="metric-label">Running</p><p class="metric-value numeric"><%= @payload.counts.running %></p><p class="metric-detail">Active issue sessions in the current runtime.</p></article>
       <article class="metric-card"><p class="metric-label">Retrying</p><p class="metric-value numeric"><%= @payload.counts.retrying %></p><p class="metric-detail">Issues waiting for the next retry window.</p></article>
       <article class="metric-card"><p class="metric-label">Blocked</p><p class="metric-value numeric"><%= @payload.counts.blocked %></p><p class="metric-detail">Issues paused for operator input or approval.</p></article>
-      <article class="metric-card"><p class="metric-label">Total tokens</p><p class="metric-value numeric"><%= format_int(@payload.codex_totals.total_tokens) %></p><p class="metric-detail numeric">In <%= format_int(@payload.codex_totals.input_tokens) %> / Out <%= format_int(@payload.codex_totals.output_tokens) %></p></article>
+      <article class="metric-card"><p class="metric-label">Backend</p><p class="metric-value"><%= @runtime.backend %></p><p class="metric-detail"><%= if @runtime.restart_required, do: "Configuration change requires restart.", else: "Frozen for this service lifetime." %></p></article>
+      <article class="metric-card"><p class="metric-label">Usage</p><%= if @runtime.backend == :deepseek do %><p class="metric-value">unknown</p><p class="metric-detail">ACP does not report comparable billable tokens.</p><% else %><p class="metric-value numeric"><%= format_int(@payload.codex_totals.total_tokens) %></p><p class="metric-detail numeric">In <%= format_int(@payload.codex_totals.input_tokens) %> / Out <%= format_int(@payload.codex_totals.output_tokens) %></p><% end %></article>
       <article class="metric-card"><p class="metric-label">Runtime</p><p class="metric-value numeric"><%= format_runtime_seconds(total_runtime_seconds(@payload, @now)) %></p><p class="metric-detail">Total Codex runtime across completed and active sessions.</p></article>
     </section>
     """
@@ -68,7 +71,7 @@ defmodule SymphonyElixirWeb.Dashboard.RuntimeComponents do
                 <td><.copy_session_id session_id={entry.session_id} /></td>
                 <td class="numeric"><%= format_runtime_and_turns(entry.started_at, entry.turn_count, @now) %></td>
                 <td><.last_update entry={entry} /></td>
-                <td><div class="token-stack numeric"><span>Total: <%= format_int(entry.tokens.total_tokens) %></span><span class="muted">In <%= format_int(entry.tokens.input_tokens) %> / Out <%= format_int(entry.tokens.output_tokens) %></span></div></td>
+                <td><div class="token-stack numeric"><span>Total tokens: <%= format_int(entry.tokens.total_tokens) %></span><span class="muted">In <%= format_int(entry.tokens.input_tokens) %> / Out <%= format_int(entry.tokens.output_tokens) %></span></div></td>
               </tr>
             </tbody>
           </table>

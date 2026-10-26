@@ -111,6 +111,19 @@ defmodule SymphonyElixir.CLITest do
     assert message =~ "Workflow file not found:"
   end
 
+  test "rejects mutually exclusive static and live preflight flags before startup" do
+    deps = %{
+      file_regular?: fn _path -> flunk("preflight conflict must not inspect workflow") end,
+      set_workflow_file_path: fn _path -> flunk("preflight conflict must not set workflow") end,
+      set_logs_root: fn _path -> flunk("preflight conflict must not set logs") end,
+      set_server_port_override: fn _port -> flunk("preflight conflict must not set port") end,
+      ensure_all_started: fn -> flunk("preflight conflict must not start application") end
+    }
+
+    assert {:error, message} = CLI.evaluate(["--check", "--check-live", "WORKFLOW.md"], deps)
+    assert message =~ "Usage: symphony"
+  end
+
   test "returns startup error when app cannot start" do
     deps = %{
       file_regular?: fn _path -> true end,
@@ -135,5 +148,12 @@ defmodule SymphonyElixir.CLITest do
     }
 
     assert :ok = CLI.evaluate([@ack_flag, "WORKFLOW.md"], deps)
+  end
+
+  test "tracker MCP starts only its HTTP client dependency" do
+    assert :ok = CLI.ensure_tracker_tool_server_http_client(fn -> {:ok, [:req, :finch]} end)
+
+    assert {:error, :http_client_unavailable} =
+             CLI.ensure_tracker_tool_server_http_client(fn -> {:error, :http_client_unavailable} end)
   end
 end
