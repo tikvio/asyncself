@@ -40,7 +40,10 @@ defmodule SymphonyElixir.DashboardLinearAction do
     with {:ok, issue} <- read_issue(issue_id, graphql),
          :ok <- validate_scope(issue, scope),
          {:ok, target_state_id} <- resolve_target_state(issue, graphql) do
-      key = {issue.id, @target_state, observed_state_id}
+      # Linear reuses the same workflow-state ID every time an issue returns to
+      # In Review. Include the issue revision so a later, legitimate retry is
+      # not mistaken for the completed action from an earlier transition.
+      key = {issue.id, @target_state, observed_state_id, issue.updated_at}
       metadata = %{issue_id: issue.id, target_state: @target_state, observed_state_id: observed_state_id}
 
       case current_state_result(issue, observed_state_id, key, metadata, ledger) do
@@ -153,7 +156,7 @@ defmodule SymphonyElixir.DashboardLinearAction do
     query = """
     query DashboardMergingIssue($id: String!) {
       issue(id: $id) {
-        id identifier
+        id identifier updatedAt
         state { id name }
         team { id key }
         project { id slugId }
@@ -165,6 +168,7 @@ defmodule SymphonyElixir.DashboardLinearAction do
     with {:ok, payload} <- graphql.(query, %{id: issue_id}),
          issue when is_map(issue) <- get_in(payload, ["data", "issue"]) || Map.get(payload, "issue"),
          id when is_binary(id) <- Map.get(issue, "id"),
+         updated_at when is_binary(updated_at) <- Map.get(issue, "updatedAt"),
          %{"id" => state_id, "name" => state_name} <- Map.get(issue, "state"),
          %{"id" => team_id} <- Map.get(issue, "team"),
          %{"id" => project_id, "slugId" => project_slug} <- Map.get(issue, "project") do
@@ -172,6 +176,7 @@ defmodule SymphonyElixir.DashboardLinearAction do
        %{
          id: id,
          identifier: Map.get(issue, "identifier"),
+         updated_at: updated_at,
          state: %{id: state_id, name: state_name},
          team_id: team_id,
          project_id: project_id,

@@ -42,6 +42,24 @@ defmodule SymphonyElixir.DashboardLinearActionTest do
     assert %{writes: 1, state: :merging} = Agent.get(agent, & &1)
   end
 
+  test "an unconfirmed mutation fails instead of claiming Gatekeeper is waiting", %{ledger: ledger} do
+    agent = start_fixture(:in_review, :mutation_ignored)
+
+    assert {:error, :mutation_unconfirmed} =
+             DashboardLinearAction.submit_for_test("issue-1", "review-state", options(agent, ledger))
+
+    assert %{writes: 1, state: :in_review} = Agent.get(agent, & &1)
+  end
+
+  test "an issue already in Merging is confirmed without another mutation", %{ledger: ledger} do
+    agent = start_fixture(:merging, :success)
+
+    assert {:ok, %{status: :waiting_gatekeeper, outcome: :already_merging}} =
+             DashboardLinearAction.submit_for_test("issue-1", "review-state", options(agent, ledger))
+
+    assert %{writes: 0, state: :merging} = Agent.get(agent, & &1)
+  end
+
   test "an externally changed state becomes a conflict rather than an overwrite", %{ledger: ledger} do
     agent = start_fixture(:in_review, :external_change_after_write)
 
@@ -138,6 +156,35 @@ defmodule SymphonyElixir.DashboardLinearActionTest do
     assert %{writes: 1} = Agent.get(agent, & &1)
   end
 
+  test "a later In Review revision can transition after an earlier action and ledger restart" do
+    ledger = Module.concat(__MODULE__, "RoundTripLedger#{System.unique_integer([:positive])}")
+    path = Path.join(System.tmp_dir!(), "dashboard-action-round-trip-#{System.unique_integer([:positive])}.dets")
+    {:ok, first_ledger} = DashboardActionLedger.start_link(name: ledger, path: path)
+    agent = start_fixture(:in_review, :success)
+    opts = options(agent, ledger)
+
+    on_exit(fn ->
+      if pid = Process.whereis(ledger), do: GenServer.stop(pid)
+      File.rm(path)
+    end)
+
+    assert {:ok, %{status: :waiting_gatekeeper}} =
+             DashboardLinearAction.submit_for_test("issue-1", "review-state", opts)
+
+    :ok = GenServer.stop(first_ledger)
+
+    Agent.update(agent, fn value ->
+      %{value | state: :in_review, updated_at: "2026-10-27T01:23:26.413Z"}
+    end)
+
+    {:ok, _second_ledger} = DashboardActionLedger.start_link(name: ledger, path: path)
+
+    assert {:ok, %{status: :waiting_gatekeeper}} =
+             DashboardLinearAction.submit_for_test("issue-1", "review-state", opts)
+
+    assert %{writes: 2, state: :merging} = Agent.get(agent, & &1)
+  end
+
   test "ledger survives a service restart without retaining sensitive response data" do
     name = Module.concat(__MODULE__, "RestartLedger#{System.unique_integer([:positive])}")
     path = Path.join(System.tmp_dir!(), "dashboard-action-restart-#{System.unique_integer([:positive])}.dets")
@@ -175,7 +222,14 @@ defmodule SymphonyElixir.DashboardLinearActionTest do
   defp start_fixture(state, behavior) do
     {:ok, agent} =
       Agent.start_link(fn ->
-        %{state: state, behavior: behavior, writes: 0, mutation_query: nil, mutation_variables: nil}
+        %{
+          state: state,
+          behavior: behavior,
+          writes: 0,
+          mutation_query: nil,
+          mutation_variables: nil,
+          updated_at: "2026-10-27T01:16:20.984Z"
+        }
       end)
 
     agent
@@ -209,6 +263,7 @@ defmodule SymphonyElixir.DashboardLinearActionTest do
               case behavior do
                 :success -> {{:ok, mutation_success()}, %{next | state: :merging}}
                 :response_lost_after_write -> {{:error, :timeout}, %{next | state: :merging}}
+                :mutation_ignored -> {{:ok, mutation_success()}, next}
                 :external_change_after_write -> {{:ok, mutation_success()}, %{next | state: :done}}
                 {:blocked_success, parent} -> {{:blocked, parent}, %{next | state: :merging}}
               end
@@ -227,12 +282,13 @@ defmodule SymphonyElixir.DashboardLinearActionTest do
           end
 
         query =~ "DashboardMergingIssue" ->
-          {:ok, %{"data" => %{"issue" => issue_payload(Agent.get(agent, & &1.state))}}}
+          fixture = Agent.get(agent, & &1)
+          {:ok, %{"data" => %{"issue" => issue_payload(fixture.state, fixture.updated_at)}}}
       end
     end
   end
 
-  defp issue_payload(state) do
+  defp issue_payload(state, updated_at) do
     state =
       case state do
         :in_review -> %{"id" => "review-state", "name" => "In Review"}
@@ -243,6 +299,7 @@ defmodule SymphonyElixir.DashboardLinearActionTest do
     %{
       "id" => "issue-1",
       "identifier" => "EXM-1",
+      "updatedAt" => updated_at,
       "state" => state,
       "team" => %{"id" => "team-1", "key" => "EXM"},
       "project" => %{"id" => "project-1", "slugId" => "1234abcd5678"},
