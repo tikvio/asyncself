@@ -40,7 +40,9 @@ defmodule SymphonyElixir.Orchestrator do
       blocked: %{},
       retry_attempts: %{},
       codex_totals: nil,
-      codex_rate_limits: nil
+      codex_rate_limits: nil,
+      backend_runtime: nil,
+      restart_required: false
     ]
   end
 
@@ -66,7 +68,9 @@ defmodule SymphonyElixir.Orchestrator do
           tick_token: nil,
           task_supervisor: Keyword.get(opts, :task_supervisor, SymphonyElixir.TaskSupervisor),
           codex_totals: @empty_codex_totals,
-          codex_rate_limits: nil
+          codex_rate_limits: nil,
+          backend_runtime: Config.backend_runtime(),
+          restart_required: Config.backend_restart_required?()
         }
 
         run_terminal_workspace_cleanup()
@@ -976,7 +980,7 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp spawn_issue_on_worker_host(%State{} = state, issue, attempt, recipient, worker_host) do
     case Task.Supervisor.start_child(state.task_supervisor, fn ->
-           AgentRunner.run(issue, recipient, attempt: attempt, worker_host: worker_host)
+           AgentRunner.run(issue, recipient, attempt: attempt, worker_host: worker_host, backend_runtime: state.backend_runtime)
          end) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
@@ -990,6 +994,7 @@ defmodule SymphonyElixir.Orchestrator do
             identifier: issue.identifier,
             issue: issue,
             worker_host: worker_host,
+            backend: state.backend_runtime.backend,
             workspace_path: nil,
             session_id: nil,
             last_codex_message: nil,
@@ -1303,7 +1308,7 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp select_worker_host(%State{} = state, preferred_worker_host) do
-    case Config.settings!().worker.ssh_hosts do
+    case worker_hosts_for_runtime(state.backend_runtime) do
       [] ->
         nil
 
@@ -1322,6 +1327,12 @@ defmodule SymphonyElixir.Orchestrator do
         end
     end
   end
+
+  # The backend snapshot is frozen for the service lifetime. In particular, a
+  # workflow reload must not turn a locally validated DeepSeek runtime into an
+  # SSH dispatch before the required restart has happened.
+  defp worker_hosts_for_runtime(%{backend: :deepseek, worker_topology: :local}), do: []
+  defp worker_hosts_for_runtime(_runtime), do: Config.settings!().worker.ssh_hosts
 
   defp preferred_worker_host_available?(preferred_worker_host, hosts)
        when is_binary(preferred_worker_host) and is_list(hosts) do
@@ -1522,6 +1533,8 @@ defmodule SymphonyElixir.Orchestrator do
        blocked: blocked,
        codex_totals: state.codex_totals,
        rate_limits: Map.get(state, :codex_rate_limits),
+       backend: state.backend_runtime && state.backend_runtime.backend,
+       restart_required: state.restart_required == true,
        polling: %{
          checking?: state.poll_check_in_progress == true,
          next_poll_in_ms: next_poll_in_ms(state.next_poll_due_at_ms, now_ms),
@@ -1681,7 +1694,8 @@ defmodule SymphonyElixir.Orchestrator do
     %{
       state
       | poll_interval_ms: config.polling.interval_ms,
-        max_concurrent_agents: config.agent.max_concurrent_agents
+        max_concurrent_agents: config.agent.max_concurrent_agents,
+        restart_required: Config.backend_restart_required?()
     }
   end
 

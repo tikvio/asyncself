@@ -3,8 +3,8 @@ defmodule SymphonyElixir.Config do
   Runtime configuration loaded from `WORKFLOW.md`.
   """
 
-  alias SymphonyElixir.{Config.Schema, Tracker}
-  alias SymphonyElixir.{Workflow, WorkflowStore}
+  alias SymphonyElixir.AgentBackend.Runtime
+  alias SymphonyElixir.{Config.Schema, Tracker, Workflow, WorkflowStore}
 
   @default_prompt_template """
   You are working on an issue from the configured tracker.
@@ -30,6 +30,17 @@ defmodule SymphonyElixir.Config do
   def settings do
     WorkflowStore.settings()
   end
+
+  @spec backend_runtime() :: Runtime.t()
+  def backend_runtime do
+    case WorkflowStore.backend_runtime() do
+      {:ok, runtime} -> runtime
+      {:error, reason} -> raise ArgumentError, "Invalid backend runtime: #{inspect(reason)}"
+    end
+  end
+
+  @spec backend_restart_required?() :: boolean()
+  def backend_restart_required?, do: WorkflowStore.restart_required?()
 
   @spec settings!() :: Schema.t()
   def settings! do
@@ -119,7 +130,10 @@ defmodule SymphonyElixir.Config do
     if is_nil(settings.tracker.kind) do
       {:error, :missing_tracker_kind}
     else
-      Tracker.validate_config(settings.tracker)
+      case Tracker.validate_config(settings.tracker) do
+        :ok -> Runtime.validate(settings, skip_command: true)
+        error -> error
+      end
     end
   end
 

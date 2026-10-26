@@ -148,6 +148,30 @@ defmodule SymphonyElixir.ExtensionsTest do
     assert {:stop, {:missing_workflow_file, ^missing_path, :enoent}} = WorkflowStore.init([])
   end
 
+  test "workflow store freezes the backend runtime and marks restart required on backend reload" do
+    assert {:ok, state} = WorkflowStore.init([])
+    assert state.backend_runtime.backend == :codex
+    assert state.restart_required == false
+
+    workflow_path = Workflow.workflow_file_path()
+    content = File.read!(workflow_path)
+
+    File.write!(
+      workflow_path,
+      String.replace(
+        content,
+        "agent:\n  max_concurrent_agents:",
+        "agent:\n  backend: \"deepseek\"\n  max_concurrent_agents:"
+      )
+    )
+
+    assert {:reply, :ok, reloaded_state} = WorkflowStore.handle_call(:force_reload, self(), state)
+    assert reloaded_state.settings.agent.backend == "deepseek"
+    assert reloaded_state.backend_runtime == state.backend_runtime
+    assert reloaded_state.backend_runtime.backend == :codex
+    assert reloaded_state.restart_required == true
+  end
+
   test "workflow store start_link and poll callback cover missing-file error paths" do
     ensure_workflow_store_running()
     existing_path = Workflow.workflow_file_path()
@@ -315,7 +339,8 @@ defmodule SymphonyElixir.ExtensionsTest do
                "total_tokens" => 12,
                "seconds_running" => 42.5
              },
-             "rate_limits" => %{"primary" => %{"remaining" => 11}}
+             "rate_limits" => %{"primary" => %{"remaining" => 11}},
+             "runtime" => %{"backend" => "codex", "restart_required" => false}
            }
 
     conn = get(build_conn(), "/api/v1/MT-HTTP")

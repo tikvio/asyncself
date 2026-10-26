@@ -1265,6 +1265,19 @@ defmodule SymphonyElixir.CoreTest do
     assert Orchestrator.select_worker_host_for_test(state, "worker-a") == "worker-a"
   end
 
+  test "a frozen local DeepSeek runtime never dispatches to SSH hosts added by reload" do
+    write_workflow_file!(Workflow.workflow_file_path(),
+      worker_ssh_hosts: ["worker-a"]
+    )
+
+    state = %Orchestrator.State{
+      backend_runtime: %{backend: :deepseek, worker_topology: :local},
+      running: %{}
+    }
+
+    assert Orchestrator.select_worker_host_for_test(state, "worker-a") == nil
+  end
+
   defp assert_due_in_range(due_at_ms, min_remaining_ms, max_remaining_ms) do
     remaining_ms = due_at_ms - System.monotonic_time(:millisecond)
 

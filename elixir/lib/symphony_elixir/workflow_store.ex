@@ -6,6 +6,7 @@ defmodule SymphonyElixir.WorkflowStore do
   use GenServer
   require Logger
 
+  alias SymphonyElixir.AgentBackend.Runtime
   alias SymphonyElixir.Config
   alias SymphonyElixir.Config.Schema
   alias SymphonyElixir.Workflow
@@ -15,7 +16,7 @@ defmodule SymphonyElixir.WorkflowStore do
   defmodule State do
     @moduledoc false
 
-    defstruct [:path, :stamp, :workflow, :settings]
+    defstruct [:path, :stamp, :workflow, :settings, :backend_runtime, restart_required: false]
   end
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -45,6 +46,25 @@ defmodule SymphonyElixir.WorkflowStore do
           {:ok, %State{settings: settings}} -> {:ok, settings}
           {:error, reason} -> {:error, reason}
         end
+    end
+  end
+
+  @spec backend_runtime() :: {:ok, Runtime.t()} | {:error, term()}
+  def backend_runtime do
+    case Process.whereis(__MODULE__) do
+      pid when is_pid(pid) ->
+        GenServer.call(__MODULE__, :backend_runtime)
+
+      _ ->
+        with {:ok, settings} <- settings(), do: Runtime.build(settings, skip_command: true)
+    end
+  end
+
+  @spec restart_required?() :: boolean()
+  def restart_required? do
+    case Process.whereis(__MODULE__) do
+      pid when is_pid(pid) -> GenServer.call(__MODULE__, :restart_required?)
+      _ -> false
     end
   end
 
@@ -105,6 +125,9 @@ defmodule SymphonyElixir.WorkflowStore do
     end
   end
 
+  def handle_call(:backend_runtime, _from, %State{} = state), do: {:reply, {:ok, state.backend_runtime}, state}
+  def handle_call(:restart_required?, _from, %State{} = state), do: {:reply, state.restart_required, state}
+
   @impl true
   def handle_info(:poll, %State{} = state) do
     schedule_poll()
@@ -132,7 +155,12 @@ defmodule SymphonyElixir.WorkflowStore do
   defp reload_path(path, state) do
     case load_state(path) do
       {:ok, new_state} ->
-        {:ok, new_state}
+        if Runtime.immutable_equal?(state.backend_runtime, new_state.backend_runtime) do
+          {:ok, %{new_state | restart_required: state.restart_required}}
+        else
+          Logger.warning("Backend configuration changed; restart_required=true backend=#{new_state.backend_runtime.backend}")
+          {:ok, %{new_state | backend_runtime: state.backend_runtime, restart_required: true}}
+        end
 
       {:error, reason} ->
         log_reload_error(path, reason)
@@ -158,8 +186,9 @@ defmodule SymphonyElixir.WorkflowStore do
     with {:ok, workflow} <- Workflow.load(path),
          {:ok, settings} <- Schema.parse(workflow.config),
          :ok <- Config.validate_settings(settings),
+         {:ok, runtime} <- Runtime.build(settings, skip_command: true),
          {:ok, stamp} <- current_stamp(path) do
-      {:ok, %State{path: path, stamp: stamp, workflow: workflow, settings: settings}}
+      {:ok, %State{path: path, stamp: stamp, workflow: workflow, settings: settings, backend_runtime: runtime}}
     else
       {:error, reason} ->
         {:error, reason}
