@@ -3,6 +3,7 @@ defmodule SymphonyElixir.DeepSeekAdapterTest do
 
   alias SymphonyElixir.AgentBackend.DeepSeek
 
+  @tag skip: System.find_executable("dsh") == nil or System.find_executable("node") == nil
   test "real pinned dsh ACP handshake is stdout-clean in an isolated profile" do
     workspace = Path.join(System.tmp_dir!(), "asyncself-dsh-test-#{System.unique_integer([:positive])}")
     dsh_home = Path.join(System.tmp_dir!(), "asyncself-dsh-home-#{System.unique_integer([:positive])}")
@@ -25,6 +26,7 @@ defmodule SymphonyElixir.DeepSeekAdapterTest do
     assert :ok = DeepSeek.close_session(session)
   end
 
+  @tag skip: System.find_executable("dsh") == nil or System.find_executable("node") == nil
   test "real pinned dsh ACP mounts an absolute stdio MCP command" do
     workspace = Path.join(System.tmp_dir!(), "asyncself-dsh-mcp-#{System.unique_integer([:positive])}")
     dsh_home = Path.join(System.tmp_dir!(), "asyncself-dsh-mcp-home-#{System.unique_integer([:positive])}")
